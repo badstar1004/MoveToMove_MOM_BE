@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kosa.kosafinalprojbackend.mybatis.mappers.comment.CommentMapper">
+
+  <!-- 코멘트 작성자 확인 및 존재여부 -->
+  <select id="checkCommentWriter" resultType="boolean">
+    SELECT EXISTS(SELECT 1
+                  FROM comment
+                  WHERE comment_id = #{commentId}
+                    AND member_id  = #{memberId}
+                    AND deleted_at IS NULL) AS result
+  </select>
+
+  <!-- 코멘트 조회 (코멘트 아이디) -->
+  <select id="selectCommentById" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.kanban.card.domain.dto.CardCommentDto">
+    SELECT co.comment_id
+         , co.member_id
+         , co.content
+         , co.created_at
+         , me.email
+         , me.nick_name
+         , me.profile_url
+      FROM comment              co
+INNER JOIN members              me
+        ON me.member_id         = co.member_id
+     WHERE co.comment_id        = #{commentId}
+       AND me.deleted_at        IS NULL
+       AND co.deleted_at        IS NULL
+  ORDER BY co.created_at
+  </select>
+
+  <!-- 코멘트 내용 수정 -->
+  <update id="updateComment">
+    UPDATE comment
+       SET content      = #{commentForm.content}
+         , updated_at   = NOW()
+     WHERE comment_id   = #{commentId}
+  </update>
+
+  <!-- 코멘트 내용 삭제 -->
+  <update id="deleteComment" parameterType="Long">
+    UPDATE comment
+       SET deleted_at   = NOW()
+     WHERE comment_id   = #{commentId}
+  </update>
+</mapper>

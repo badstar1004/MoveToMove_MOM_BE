@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kosa.kosafinalprojbackend.mybatis.mappers.projectjoin.ProjectJoinMapper">
+
+  <!-- 조회 -->
+  <select id="existsByProjectIdAndMemberId" resultType="boolean">
+    SELECT EXISTS (SELECT 1
+                     FROM project_joins
+                    WHERE project_id = #{projectId}
+                      AND member_id = #{memberId}
+                      AND project_leader_YN = 'Y') AS result
+  </select>
+
+  <!-- 저장 -->
+  <insert id="insertProjectJoin" parameterType="map">
+      INSERT
+        INTO project_joins
+           ( member_id
+           , project_id
+           , project_leader_YN
+           )
+      VALUES
+    <foreach collection="memberDtoMap" item="value" index="key" separator=",">
+          ( #{key}
+          , #{projectId}
+          , #{value}
+          )
+      </foreach>
+  </insert>
+
+  <!-- 폴더 기준 프로젝트_조인 삭제 -->
+  <delete id="deleteProjectJoinsByProjectIds">
+    DELETE
+      FROM project_joins
+     WHERE member_id    = #{memberId}
+       AND project_id   IN
+        <foreach item="projectId" collection="projectList" open="(" separator="," close=")">
+          #{projectId}
+        </foreach>
+  </delete>
+
+
+
+  <!-- 조회 (프로젝트 아이디, 프로젝트 명, 팀장 여부) -->
+  <select id="getProjectsByIds" resultType="com.kosa.kosafinalprojbackend.domains.folder.model.dto.NotIncludedProjectDto">
+    SELECT p.project_id     id
+         , p.project_name   title
+         , p.project_description
+         , p.start_at
+         , p.end_at
+         , pj.project_leader_YN
+         , 'project'    type
+         , p.created_at
+         , p.deleted_at
+      FROM projects p
+ LEFT JOIN project_joins pj
+        ON p.project_id = pj.project_id
+     WHERE p.project_id     IN
+    <foreach item="id" collection="projectIds" open="(" separator="," close=")">
+      #{id}
+    </foreach>
+  ORDER BY p.project_name
+  </select>
+
+
+  <!-- 팀장 권한을 한 번에 업데이트 -->
+  <update id="updateTransferLeader">
+    UPDATE project_joins
+    SET project_leader_YN =
+          (CASE
+            WHEN member_id = #{memberId} THEN 'N'
+            WHEN member_id = #{tranMemberId} THEN 'Y'
+           END)
+    WHERE project_id = #{projectId}
+      AND (member_id = #{memberId} OR member_id = #{tranMemberId})
+  </update>
+
+
+  <!-- 폴더 기준 프로젝트_조인 삭제 -->
+  <delete id="deleteReleaseMember">
+    DELETE
+      FROM project_joins
+     WHERE project_id = #{projectId}
+       AND member_id  = #{releaseMemberId}
+  </delete>
+
+
+  <!-- 프로젝트 참여자 저장 -->
+  <insert id="insertProjectJoins" parameterType="list">
+    INSERT INTO project_joins
+    ( member_id
+    , project_id
+    )
+    VALUES
+    <foreach collection="memberList" item="memberDto" separator=",">
+      ( #{memberDto.memberId}
+      , #{projectId}
+      )
+    </foreach>
+  </insert>
+
+</mapper>

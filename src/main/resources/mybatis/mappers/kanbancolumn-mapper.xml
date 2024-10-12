@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kosa.kosafinalprojbackend.mybatis.mappers.kanbancolumn.KanbanColumnMapper">
+
+  <!-- 칸반 컬럼 존재 여부 -->
+  <select id="existsByKanbanColumn" parameterType="Long" resultType="boolean">
+    SELECT EXISTS (SELECT 1
+                     FROM kanban_columns
+                    WHERE kanban_column_id = #{kanbanColumnId}) AS result
+  </select>
+
+  <!-- 칸반 카드 조회 (칸반 컬럼 기준) -->
+  <select id="selectKanbanCardByKanbanColumn" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.kanban.column.model.dto.KanbanColumnInCardDto">
+    SELECT kco.kanban_column_id
+         , kco.kanban_column_name
+         , kco.column_seq
+         , kca.kanban_card_id
+         , kca.title
+         , kca.content
+         , kca.card_seq
+         , kca.priority
+         , kca.task_size
+         , kca.start_at
+         , kca.end_at
+         , kca.created_at
+      FROM kanban_columns       kco
+INNER JOIN kanban_cards         kca
+        ON kca.kanban_column_id = kco.kanban_column_id
+     WHERE kco.kanban_column_id = #{kanbanColumnId}
+       AND kco.deleted_at       IS NULL
+       AND kca.deleted_at       IS NULL
+  </select>
+
+  <!-- 칸반 카드 저장 -->
+  <insert id="insertKanbanCard" useGeneratedKeys="true" keyProperty="kanbanCardForm.kanbanCardId">
+
+    INSERT
+      INTO kanban_cards
+         ( kanban_column_id
+         , title
+         , card_seq
+         )
+    VALUES
+         ( #{kanbanColumnId}
+         , #{kanbanCardForm.title}
+         , #{cardMaxSeq}
+         )
+  </insert>
+
+  <!-- 칸반 카드 담당자 저장 -->
+  <insert id="insertKanbanCardWork" parameterType="List">
+    INSERT
+      INTO kanban_works
+         ( kanban_card_id
+         , member_id
+         )
+    VALUES
+      <foreach collection="memberList" item="memberId" separator=",">
+         ( #{kanbanCardId}
+         , #{memberId}
+         )
+      </foreach>
+  </insert>
+
+
+
+  <!-- 저장 -->
+  <insert id="insertKanbanColumns">
+    INSERT INTO kanban_columns (project_id, kanban_column_name, column_seq)
+    VALUES
+    <foreach collection="columns" item="columnData" separator=",">
+      (#{projectId}, #{columnData.column}, #{columnData.order})
+    </foreach>
+  </insert>
+
+  <!-- 칸반 컬럼 저장, 수정 -->
+    <insert id="upsertKanbanColumns" parameterType="List">
+        INSERT INTO kanban_columns (kanban_column_id, kanban_column_name, column_seq, project_id)
+        VALUES
+        <foreach collection="list" item="column" separator=",">
+            (#{column.kanbanColumnId}, #{column.kanbanColumnName}, #{column.columnSeq}, #{column.projectId})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+        kanban_column_name = VALUES(kanban_column_name),
+        column_seq = VALUES(column_seq),
+        updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+  <!-- 칸반 컬럼 리스트 조회(프로젝트ID 기준)  -->
+  <select id="selectKanbanColumns" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.kanban.column.model.dto.ColumnDto">
+    SELECT project_id, kanban_column_id, kanban_column_name, column_seq
+    FROM kanban_columns
+    WHERE project_id = #{projectId}
+    AND deleted_at IS NULL
+    ORDER BY column_seq
+  </select>
+
+  <!-- 칸반 컬럼 순서 수정(수정된 순서에 따라 seq 수정) -->
+    <update id="updateColumnSeqBatch" parameterType="list">
+        <foreach collection="columns" item="column" separator=";">
+            UPDATE kanban_columns
+            SET column_seq = #{column.columnSeq}
+            WHERE kanban_column_id = #{column.kanbanColumnId}
+        </foreach>
+    </update>
+
+
+
+  <!-- 조회 (kanban_column 존재 여부) -->
+  <select id="existsKanbanColumns" parameterType="Long" resultType="boolean">
+    SELECT EXISTS ( SELECT 1
+                    FROM kanban_columns
+                    WHERE kanban_column_id = #{kanbanColumnId}) AS result
+  </select>
+
+  <!-- 칸반 컬럼 삭제 -->
+  <update id="deleteKanbanColumns" parameterType="Long">
+    UPDATE kanban_columns SET deleted_at = Now()
+    WHERE kanban_column_id = #{kanbanColumnId}
+  </update>
+
+    <!-- 칸반 컬럼 순서(seq) 업데이트 -->
+    <update id="updateColumnSeqAfterDelete" parameterType="map">
+        UPDATE kanban_columns
+        SET column_seq = column_seq - 1
+        WHERE project_id = #{projectId}
+          AND column_seq > #{deletedColumnSeq}
+          AND deleted_at IS NULL;
+    </update>
+
+
+    <!-- 칸반 컬럼 조회(컬럼ID 기준) -->
+    <select id="findByColumnId" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.kanban.column.model.dto.ColumnDto">
+        SELECT project_id, kanban_column_id, kanban_column_name, column_seq
+        FROM kanban_columns
+        WHERE kanban_column_id = #{columnId}
+        AND deleted_at IS NULL
+    </select>
+
+
+
+  <!-- 컬럼 기준 카드의 MAX_SEQ -->
+  <select id="selectKanbanCardMaxSeqByKanbanColumnId" resultType="int">
+    SELECT COALESCE(MAX(card_seq), 0)   maxSeq
+      FROM kanban_cards
+     WHERE kanban_column_id = #{kanbanColumnId}
+       AND deleted_at is null
+  </select>
+
+  <!-- 카드 아이디 기준 컬럼 정보까지 조회 -->
+  <select id="selectKanbanCardByKanbanCardId" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.kanban.project.model.dto.ProjectInCardDto">
+    SELECT kco.kanban_column_id
+         , kco.kanban_column_name
+         , kco.column_seq
+         , kca.kanban_card_id
+         , kca.title
+         , kca.content
+         , kca.card_seq
+         , kca.priority
+         , kca.task_size
+         , kca.start_at
+         , kca.end_at
+         , kca.created_at
+      FROM kanban_cards         kca
+INNER JOIN kanban_columns       kco
+        ON kca.kanban_column_id = kco.kanban_column_id
+     WHERE kca.kanban_card_id   = #{kanbanCardId}
+       AND kca.deleted_at       IS NULL
+       AND kco.deleted_at       IS NULL
+  </select>
+</mapper>
+

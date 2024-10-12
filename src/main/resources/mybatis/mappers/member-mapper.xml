@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kosa.kosafinalprojbackend.mybatis.mappers.member.MemberMapper">
+
+    <!-- 아이디 기준 정보 조회 -->
+    <select id="findByMemberId" resultType="com.kosa.kosafinalprojbackend.domains.member.model.dto.MemberDto">
+        SELECT member_id
+             , email
+             , nick_name
+             , password
+             , profile_url
+             , social
+             , created_at
+             , deleted_at
+          FROM members
+         WHERE member_id = #{memberId}
+           AND deleted_at IS NULL
+    </select>
+
+
+    <!-- 이메일 기준 정보 조회 -->
+    <select id="findByMemberEmail" resultType="com.kosa.kosafinalprojbackend.domains.member.model.dto.MemberDto">
+        SELECT member_id
+             , email
+             , nick_name
+             , password
+             , profile_url
+             , social
+             , created_at
+             , deleted_at
+          FROM members
+         WHERE email = #{email}
+           AND deleted_at IS NULL
+    </select>
+
+
+    <!-- 이메일 여부  -->
+    <select id="existsByMemberEmail" parameterType="string" resultType="boolean">
+        SELECT EXISTS (SELECT 1
+                         FROM members
+                        WHERE email      = #{email}
+                          AND deleted_at IS NULL) AS result
+    </select>
+
+
+    <!-- 닉네임 여부 -->
+    <select id="existsByMemberNickName" resultType="boolean">
+        SELECT EXISTS (SELECT 1
+                         FROM members
+                        WHERE nick_name = #{nickName}
+                          <if test="memberId != null">
+                          AND member_id != #{memberId}
+                          </if>
+                      ) AS result
+    </select>
+
+    <!-- 아이디 여부 -->
+    <select id="existsByMemberId" parameterType="long" resultType="boolean">
+      SELECT EXISTS (SELECT 1
+                       FROM members
+                      WHERE member_id  = #{memberId}
+                        AND deleted_at IS NULL) AS result
+    </select>
+
+    <!-- 회원가입 -->
+    <insert id="insertMember" parameterType="com.kosa.kosafinalprojbackend.domains.member.model.form.SignUpForm">
+        INSERT
+          INTO members
+             ( email
+             , nick_name
+             , password
+             , profile_url)
+        VALUES
+             ( #{email}
+             , #{nickName}
+             , #{password}
+             , #{profileUrl})
+    </insert>
+
+    <!-- 회원 정보 수정  -->
+    <update id="updateMemberInfo">
+        UPDATE members
+           SET nick_name    = #{signUpForm.nickName}
+             <if test="signUpForm.password != ''">
+             , password     = #{signUpForm.password}
+             </if>
+             , profile_url  = (CASE WHEN #{signUpForm.profileUrl} = ''
+                                    THEN NULL
+                                    ELSE #{signUpForm.profileUrl}
+                               END)
+      WHERE MEMBER_ID       = #{memberId}
+    </update>
+
+    <!-- 회원 탈퇴 -->
+    <update id="memberWithdraw" parameterType="Long">
+        update members
+        set deleted_at = NOW()
+        where member_id = #{memberId}
+    </update>
+
+
+    <!-- 마이페이지 - task -->
+    <select id="selectAllTask" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.member.model.dto.AllTaskDto">
+        SELECT COUNT(*) AS total_task
+             , SUM(CASE WHEN kco.column_seq = seq.max_seq THEN 1 ELSE 0 END)    end_task
+             , COUNT(*) - SUM(CASE WHEN kco.column_seq = seq.max_seq THEN 1 ELSE 0 END) remain_task
+          FROM kanban_works         kw
+    INNER JOIN kanban_cards         kca
+            ON kca.kanban_card_id   = kw.kanban_card_id
+           AND kca.deleted_at       is null
+    INNER JOIN kanban_columns       kco
+            ON kco.kanban_column_id = kca.kanban_column_id
+    INNER JOIN (SELECT pr.project_id
+                     , max(kco.column_seq)  max_seq
+                  FROM members              me
+            INNER JOIN project_joins        pj
+                    ON pj.member_id         = me.member_id
+            INNER JOIN projects             pr
+                    ON pr.project_id        = pj.project_id
+            INNER JOIN kanban_columns       kco
+                    ON kco.project_id       = pr.project_id
+                   AND kco.deleted_at       is null
+                 WHERE me.member_id         = #{memberId}
+              GROUP BY pr.project_id) seq
+            ON kco.project_id       = seq.project_id
+         WHERE kw.member_id         = #{memberId}
+    </select>
+
+
+  <!-- 마이페이지 - 프로젝트별 task -->
+  <select id="selectProjectByTask" parameterType="Long" resultType="com.kosa.kosafinalprojbackend.domains.member.model.dto.ProjectByTaskDto">
+          SELECT kco.project_id
+               , seq.project_name
+               , COUNT(*) AS total_task
+               , SUM(CASE WHEN kco.column_seq = seq.max_seq THEN 1 ELSE 0 END)    end_task
+               , COUNT(*) - SUM(CASE WHEN kco.column_seq = seq.max_seq THEN 1 ELSE 0 END) remain_task
+          FROM kanban_works         kw
+    INNER JOIN kanban_cards         kca
+            ON kca.kanban_card_id   = kw.kanban_card_id
+           AND kca.deleted_at       is null
+    INNER JOIN kanban_columns       kco
+            ON kco.kanban_column_id = kca.kanban_column_id
+    INNER JOIN (SELECT pr.project_id
+                     , pr.project_name
+                     , max(kco.column_seq)  max_seq
+                  FROM members              me
+            INNER JOIN project_joins        pj
+                    ON pj.member_id         = me.member_id
+            INNER JOIN projects             pr
+                    ON pr.project_id        = pj.project_id
+            INNER JOIN kanban_columns       kco
+                    ON kco.project_id       = pr.project_id
+                   AND kco.deleted_at       is null
+                 WHERE me.member_id         = #{memberId}
+              GROUP BY pr.project_id
+                     , pr.project_name) seq
+            ON kco.project_id       = seq.project_id
+         WHERE kw.member_id         = #{memberId}
+      GROUP BY kco.project_id
+             , seq.project_name
+  </select>
+
+
+  <!-- 비밀번호 변경 -->
+  <update id="updateMemberPassword">
+    UPDATE members
+       SET password     = #{newPassword}
+     WHERE member_id    = #{memberId}
+  </update>
+
+
+  <!-- 다른 유저 이메일로 조회 -->
+  <select id="selectMemberByEmail">
+    SELECT member_id
+         , email
+         , nick_name
+         , password
+         , profile_url
+         , social
+         , created_at
+         , deleted_at
+      FROM members
+     WHERE email = #{searchEmail}
+       AND deleted_at IS NULL
+  </select>
+
+</mapper>
