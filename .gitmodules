@@ -1,0 +1,4 @@
+[submodule "kosa-spring-config"]
+	path = kosa-spring-config
+	url = https://github.com/badstar1004/kosa-spring-config.git
+  branch = main
